@@ -1,34 +1,40 @@
 name: Build and Deploy to Azure Container Apps
 on:
-push:
-branches: [ main ]
+  push:
+    branches: [ main ]
+
 permissions:
-id-token: write # required for OIDC
-contents: read
+  id-token: write # required for OIDC
+  contents: read
+
 jobs:
-build-and-deploy:
-runs-on: ubuntu-latest
-environment: production # omit if you didn't create this environment in S
-steps:
-- name: Checkout
-uses: actions/checkout@v4
-- name: Azure Login (OIDC)
-uses: azure/login@v2
-with:
-client-id: ${{ secrets.AZURE_CLIENT_ID }}
-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-- name: Log in to ACR
-run: az acr login --name ${{ vars.ACR_NAME }}
-- name: Build and push image
-run: |
-IMAGE="${{ vars.ACR_NAME }}.azurecr.io/${{ github.event.repository.na
-docker build -t "$IMAGE" .
-docker push "$IMAGE"
-echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
-- name: Deploy new revision to Container App
-run: |
-az containerapp update \
---name ${{ vars.CONTAINERAPP_NAME }} \
---resource-group ${{ vars.RESOURCE_GROUP }} \
---image "$IMAGE"
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    # environment: production # omit if you didn't create this environment in S
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      
+      - name: Log in to ACR
+        run: az acr login --name ${{ vars.ACR_NAME }}
+
+      - name: Build and push image
+        run: |
+        IMAGE="${{ vars.ACR_NAME }}.azurecr.io/${{ github.event.repository.na
+        docker build -t "$IMAGE" .
+        docker push "$IMAGE"
+        echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Deploy new revision to Container App
+        run: |
+        az containerapp update \
+        --name ${{ vars.CONTAINERAPP_NAME }} \
+        --resource-group ${{ vars.RESOURCE_GROUP }} \
+        --image "$IMAGE"
