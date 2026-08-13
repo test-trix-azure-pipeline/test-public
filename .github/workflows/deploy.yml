@@ -52,6 +52,6 @@ jobs:
           az containerapp update \
             --name ${{ vars.CONTAINERAPP_NAME }} \
             --resource-group ${{ vars.RESOURCE_GROUP }} \
-            --image "$IMAGE"
+            --image "$IMAGE" \
             --set-env-vars \
               TEST_VAULT_1=secretref:test-vault-1
