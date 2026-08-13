@@ -8,6 +8,6 @@ app.listen(8080, () => {
 app.get('/', (req, res, next) => {
   console.log("TEST LOG");
   res.json({
-    message: `Hello, World! ${process.env.TEST_VAULT_1}`
+    message: `Hello, World! -- ${process.env.TEST_VAULT_1}`
   });
 });
