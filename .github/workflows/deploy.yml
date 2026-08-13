@@ -32,9 +32,26 @@ jobs:
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
 
+      - name: Ensure system-assigned identity
+        run: |
+          az containerapp identity assign \
+            --system-assigned \
+            --name ${{ vars.CONTAINERAPP_NAME }} \
+            --resource-group ${{ vars.RESOURCE_GROUP }}
+
+      - name: Set Key Vault secret references
+        run: |
+          az containerapp secret set \
+            --name ${{ vars.CONTAINERAPP_NAME }} \
+            --resource-group ${{ vars.RESOURCE_GROUP }} \
+            --secrets \
+              test-vault-1=keyvaultref:${{ secrets.TEST_VAULT_1 }},identityref:system
+
       - name: Deploy new revision to Container App
         run: |
           az containerapp update \
             --name ${{ vars.CONTAINERAPP_NAME }} \
             --resource-group ${{ vars.RESOURCE_GROUP }} \
             --image "$IMAGE"
+            --set-env-vars \
+              TEST_VAULT_1=secretref:test-vault-1
