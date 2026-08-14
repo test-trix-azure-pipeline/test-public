@@ -74,6 +74,7 @@ jobs:
             --resource-group ${{ vars.RESOURCE_GROUP }} \
             -o yaml > app.yaml
 
+          yq -i '.properties.template.containers[0].image = strenv(IMAGE)' app.yaml
           yq -i '.properties.template.volumes = [{"name": "kv-secrets", "storageType": "Secret", "secrets": [{"secretRef": "test-vault-1", "path": ".env"}]}]' app.yaml
           yq -i '.properties.template.containers[0].volumeMounts = [{"volumeName": "kv-secrets", "mountPath": "/mnt/secrets/envfile"}]' app.yaml
 
