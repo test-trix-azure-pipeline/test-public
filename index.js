@@ -34,7 +34,7 @@ app.get('/', (req, res, next) => {
   }
 
   res.json({
-    message: 'Hello, World!',
+    message: 'Hello, World 123!',
     env: process.env,
     mountedEnv
   });
