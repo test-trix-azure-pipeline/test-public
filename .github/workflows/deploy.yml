@@ -65,7 +65,7 @@ jobs:
       #       --resource-group ${{ vars.RESOURCE_GROUP }} \
       #       --image "$IMAGE" \
       #       --set-env-vars \
-      #         TEST_VAULT_1=secretref:test-vault-1
+      #         TEST_VAULT_1=secretref:test-vault-1 
 
       - name: Mount test-vault-1 as a volume file
         run: |
