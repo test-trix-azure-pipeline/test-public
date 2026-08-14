@@ -35,7 +35,6 @@ app.get('/', (req, res, next) => {
 
   res.json({
     message: 'Hello, World!',
-    env: process.env,
     vaultEnv
   });
 });
