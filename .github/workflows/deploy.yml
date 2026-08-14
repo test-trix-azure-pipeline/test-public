@@ -39,19 +39,48 @@ jobs:
             --name ${{ vars.CONTAINERAPP_NAME }} \
             --resource-group ${{ vars.RESOURCE_GROUP }}
 
-      - name: Set Key Vault secret references
+      - name: Sync Key Vault secrets to Container App
         run: |
+          set -euo pipefail
+          VAULT_NAME="${{ vars.KEY_VAULT_NAME }}"
+
+          mapfile -t SECRET_NAMES < <(az keyvault secret list \
+            --vault-name "$VAULT_NAME" \
+            --query "[].name" -o tsv)
+
+          CA_SECRETS=()
+          for NAME in "${SECRET_NAMES[@]}"; do
+            SECRET_URI=$(az keyvault secret show \
+              --vault-name "$VAULT_NAME" \
+              --name "$NAME" \
+              --query id -o tsv)
+            CA_SECRETS+=("${NAME}=keyvaultref:${SECRET_URI},identityref:system")
+          done
+
           az containerapp secret set \
             --name ${{ vars.CONTAINERAPP_NAME }} \
             --resource-group ${{ vars.RESOURCE_GROUP }} \
-            --secrets \
-              test-vault-1=keyvaultref:${{ secrets.TEST_VAULT_1 }},identityref:system
+            --secrets "${CA_SECRETS[@]}"
 
-      - name: Deploy new revision to Container App
+          printf '%s\n' "${SECRET_NAMES[@]}" > secret-names.txt
+
+      - name: Mount Key Vault secrets as a volume and deploy
         run: |
+          set -euo pipefail
+          az containerapp show \
+            --name ${{ vars.CONTAINERAPP_NAME }} \
+            --resource-group ${{ vars.RESOURCE_GROUP }} \
+            -o yaml > app.yaml
+
+          yq -i '.properties.template.containers[0].image = strenv(IMAGE)' app.yaml
+          yq -i '.properties.template.volumes = [{"name": "kv-secrets", "storageType": "Secret", "secrets": []}]' app.yaml
+          yq -i '.properties.template.containers[0].volumeMounts = [{"volumeName": "kv-secrets", "mountPath": "/mnt/secrets"}]' app.yaml
+
+          while IFS= read -r NAME; do
+            NAME="$NAME" yq -i '.properties.template.volumes[0].secrets += [{"secretRef": strenv(NAME), "path": strenv(NAME)}]' app.yaml
+          done < secret-names.txt
+
           az containerapp update \
             --name ${{ vars.CONTAINERAPP_NAME }} \
             --resource-group ${{ vars.RESOURCE_GROUP }} \
-            --image "$IMAGE" \
-            --set-env-vars \
-              TEST_VAULT_1=secretref:test-vault-1
+            --yaml app.yaml
