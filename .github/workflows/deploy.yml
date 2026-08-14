@@ -25,60 +25,32 @@ jobs:
       - name: Log in to ACR
         run: az acr login --name ${{ vars.ACR_NAME }}
 
-      # Writes .env on the runner from GitHub vars/secrets right before the
-      # build — the file isn't tracked in git, so it doesn't exist in the
-      # checkout otherwise. Add one line per build-time var/secret you need.
-      - name: Write .env for build
+      - name: Read secret from Key Vault
         run: |
-          cat > .env <<EOF
-          EOF
+          SECRET_VALUE=$(az keyvault secret show \
+            --id "${{ secrets.TEST_VAULT_1 }}" \
+            --query value -o tsv)
+
+          while IFS= read -r LINE; do
+            [ -n "$LINE" ] && echo "::add-mask::$LINE"
+          done <<< "$SECRET_VALUE"
+
+          {
+            echo "ENVS<<ENVS_EOF"
+            echo "$SECRET_VALUE"
+            echo "ENVS_EOF"
+          } >> "$GITHUB_ENV"
 
       - name: Build and push image
-        env:
-          DOCKER_BUILDKIT: "1"
         run: |
           IMAGE="${{ vars.ACR_NAME }}.azurecr.io/${{ github.event.repository.name }}:${{ github.sha }}"
-          docker build --secret id=env_file,src=.env -t "$IMAGE" .
+          docker build --build-arg ENVS="$ENVS" -t "$IMAGE" .
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
-          rm -f .env
 
-      - name: Ensure system-assigned identity
+      - name: Deploy new revision to Container App
         run: |
-          az containerapp identity assign \
-            --system-assigned \
-            --name ${{ vars.CONTAINERAPP_NAME }} \
-            --resource-group ${{ vars.RESOURCE_GROUP }}
-
-      - name: Set Key Vault secret references
-        run: |
-          az containerapp secret set \
-            --name ${{ vars.CONTAINERAPP_NAME }} \
-            --resource-group ${{ vars.RESOURCE_GROUP }} \
-            --secrets \
-              test-vault-1=keyvaultref:${{ secrets.TEST_VAULT_1 }},identityref:system
-
-      # - name: Deploy new revision to Container App
-      #   run: |
-      #     az containerapp update \
-      #       --name ${{ vars.CONTAINERAPP_NAME }} \
-      #       --resource-group ${{ vars.RESOURCE_GROUP }} \
-      #       --image "$IMAGE" \
-      #       --set-env-vars \
-      #         TEST_VAULT_1=secretref:test-vault-1 
-
-      - name: Mount test-vault-1 as a volume file
-        run: |
-          az containerapp show \
-            --name ${{ vars.CONTAINERAPP_NAME }} \
-            --resource-group ${{ vars.RESOURCE_GROUP }} \
-            -o yaml > app.yaml
-
-          yq -i '.properties.template.containers[0].image = strenv(IMAGE)' app.yaml
-          yq -i '.properties.template.volumes = [{"name": "kv-secrets", "storageType": "Secret", "secrets": [{"secretRef": "test-vault-1", "path": ".env"}]}]' app.yaml
-          yq -i '.properties.template.containers[0].volumeMounts = [{"volumeName": "kv-secrets", "mountPath": "/mnt/secrets/envfile"}]' app.yaml
-
           az containerapp update \
             --name ${{ vars.CONTAINERAPP_NAME }} \
             --resource-group ${{ vars.RESOURCE_GROUP }} \
-            --yaml app.yaml
+            --image "$IMAGE"
